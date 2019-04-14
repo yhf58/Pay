@@ -1,0 +1,205 @@
+﻿
+@{
+    Layout = null;
+}
+
+<!DOCTYPE html>
+
+<html>
+<head>
+    <meta name="viewport" content="width=device-width" />
+    <title>pay</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.7/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.7/js/bootstrap.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>支付测试</h1>
+        <div class="row">
+            <div class="col-md-4 col-xs-6">
+                <form role="form" data-toggle="validator">
+                    <div class="form-group">
+                        <label for="inputPrice">支付金额</label>
+                        <input type="number" name="price" id="inputPrice" class="form-control" placeholder="支付金额" value="1"
+                               max="1000" min="0.01" step="0.01" data-error="金额范围：0.01 - 1000.00，精度为两位小数" required>
+                        <div class="help-block with-errors"></div>
+                    </div>
+                    <div class="form-group">
+                        <label>支付方式</label>
+                        <div>
+                            <label class="radio-inline">
+                                <input type="radio" name="type" value="1" required> 微信
+                            </label>
+                            <label class="radio-inline">
+                                <input type="radio" name="type" value="2" checked required> 支付宝
+                            </label>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="inputRedirect">跳转地址</label>
+                        <input type="url" name="redirect" id="inputRedirect" class="form-control" placeholder="支付成功后的跳转地址"
+                               value="https://www.paypayzhu.com/" data-error="请输入正确的 URL！" required>
+                        <div class="help-block with-errors"></div>
+                    </div>
+                    <div class="form-group">
+                        <label for="inputOrderID">订单 ID</label>
+                        <input type="text" name="order_id" id="inputOrderID" class="form-control" placeholder="对接系统中的订单 ID"
+                               value="" required>
+                        <div class="help-block with-errors"><b>提示：</b>确保唯一性！</div>
+                    </div>
+                    <div class="form-group">
+                        <label for="inputOrderInfo">订单信息</label>
+                        <input type="text" name="order_info" id="inputOrderInfo" class="form-control" placeholder="说明信息（允许为空）"
+                               value="充值：User#1234">
+                    </div>
+                    <button id="btnPay" class="btn btn-primary" type="submit">立即支付</button>
+                </form>
+            </div>
+            <div class="col-md-8 col-xs-6">
+                <div class="content hide">
+                    <h3>返回结果：</h3>
+                    <pre id="codeResult"></pre>
+                    <br>
+                    <h4>扫码支付：</h4>
+                    <div class="row">
+                        <div class="col-xs-6">
+                            @*<img id="qrcode" src="">*@
+                            <div id="qrcode"></div>
+                        </div>
+                        <div class="col-xs-6">
+                            <h1 id="price"></h1>
+                            <h1 id="ttl"></h1>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="modalPaySuccess" class="modal fade" tabindex="-1" role="dialog">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                    <h4 class="modal-title">支付完成</h4>
+                </div>
+                <div class="modal-body">
+                    <p>跳转到：<span id="redirectURL"></span></p>
+                </div>
+                <div class="modal-footer">
+                    <a href="/" class="btn btn-default">新的测试</a>
+                    <button type="button" class="btn btn-default" data-dismiss="modal">留在此页面</button>
+                    <a id="aRedirectURL" href="" class="btn btn-primary">跳转</a>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/1000hz-bootstrap-validator/0.11.9/validator.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/jquery-toast-plugin/1.3.2/jquery.toast.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-toast-plugin/1.3.2/jquery.toast.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.qrcode/1.0/jquery.qrcode.min.js"></script>
+
+    <script>
+        var PayTypes = { '1': '微信', '2': '支付宝' };
+        var OrderStatuses = { '-1': '未匹配订单', '0': '等待支付', '1': '支付完成', '2': '已关闭' };
+
+        $(function () {
+            $('#inputOrderID').val('TestOrder' + new Date().getTime());
+            $('form').validator('update');
+
+            var TimeEmpire; // 二维码过期时间
+
+            $('#btnPay').click(function (e) {
+                e.stopPropagation();
+                e.preventDefault();
+
+                $('form').validator('validate');
+                if ($('form .has-error').length > 0) return false;
+
+                $('#btnPay').attr('disabled', true);
+
+                var params = {}, data = $('form').serializeArray();
+
+                for (var i in data) { params[data[i]['name']] = data[i]['value']; }
+                $.ajax({
+                    type: 'POST',
+                    url: '../Pay/pay',
+                    data: params,
+                    dataType:"json",
+                    contentType: "application/x-www-form-urlencoded;charset=utf-8",
+                    success: function (res) {
+                        //alert(res["code"])
+                        debugger
+                        $('.content').removeClass('hide');
+                        $('#codeResult').text(JSON.stringify(res, null, '  '));
+                        if (res.result && res.code === 200) {
+
+                             $('#qrcode').attr('src', res.info.qrcode);
+                            var payType = PayTypes[res.info.pay_type.toString()] || '未知支付方式';
+                            $('#qrcode').qrcode(res.info.pay_url); // 生成二维码
+                           // alert(res.info.qrcode)
+                            //$("img").attr("src", res.info.qrcode);
+                            debugger
+                            $('#price').text(payType + ': ' + res.info.real_price + '元');
+                            // 根据接口返回的 ttl，设置过期时间（ttl 的单位是秒）
+                            TimeEmpire = new Date().getTime() + res.info.ttl * 1000;
+                            updateTTL();
+                        }
+                    }
+                });
+                return false;
+            });
+
+            // 更新页面上的倒计时
+            function updateTTL() {
+                var timeLeftSec = parseInt((TimeEmpire - new Date().getTime()) / 1000); // 根据过期时间计算剩余秒数
+                if (timeLeftSec <= 0) {
+                    // 清空收款码，生成一个灰色的无效二维码
+                    $('#qrcode').html('').qrcode({ text: 'http://www.paypayzhu.com/', foreground: '#C0C4CC' });
+                    $('#ttl').html('<span style="color:#F56C6C">二维码过期</span>');
+                } else {
+                    $('#ttl').text('剩余时间：' + timeLeftSec + '秒');
+                    setTimeout(function () { updateTTL(); }, 1000);
+                    checkOrder();
+                }
+            }
+
+            var checkTimes = 0; // 检查订单状态次数
+
+            // 检查订单状态
+            function checkOrder() {
+                var order_id = $('#inputOrderID').val();
+                var redirectURL ="../Pay/pays";
+                console.log('check order: ' + order_id);
+                debugger
+                $.ajax({
+
+                    type: 'POST',
+                    url: '../Pay/order',
+                    dataType:"json",
+                    data: { "order_id": order_id },
+                    contentType: "application/x-www-form-urlencoded;charset=utf-8",
+
+                    success: function (res) {
+                        debugger
+                        var statusStr = OrderStatuses[res.info.status] || '未知状态';
+                        $.toast({ text: statusStr + "... (" + (++checkTimes) + ")", bgColor: '#CCFF99', textColor: '#303133', hideAfter: 3000, position: 'top-right' });
+                        if (res.info.status == 1) { // 支付完成
+                            $('#redirectURL').text(redirectURL);
+                            $('#aRedirectURL').attr('href', redirectURL);
+                            $('#modalPaySuccess').modal(); // 弹出框
+                        }
+                    }
+                });
+            }
+
+            $('#modalPaySuccess').on('hidden.bs.modal', function (e) {
+                $('#redirectURL').text('');
+                $('#aRedirectURL').attr('href', '');
+            });
+        });
+    </script>
+</body>
+</html>
